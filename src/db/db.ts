@@ -1,0 +1,59 @@
+import Dexie, { type Table } from 'dexie';
+
+export interface Provider {
+  id: string;
+  name: string;
+  type: 'ollama' | 'openai';
+  baseUrl: string;
+  apiKey?: string;
+  isActive: boolean;
+  stripLatest?: boolean;
+}
+
+export interface Chat {
+  id: string;
+  title: string;
+  createdAt: number;
+  selectedProviderId: string;
+  selectedModelId: string;
+  enableSlidingWindow?: boolean;
+  slidingWindowLimit?: number;
+  toolhubEnabled?: boolean;
+  toolhubDelay?: number; // Задержка перед следующим запросом в llm после вызова инструмента (в секундах)
+}
+
+export interface ToolStep {
+  method: 'listTools' | 'callTool';
+  path: string;
+  payload?: any;
+  result?: any;
+  error?: string;
+  timestamp: number;
+}
+
+export interface Message {
+  id: string;
+  chatId: string;
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  tokens?: number;
+  toolSteps?: ToolStep[];
+}
+
+export class DevStudioDB extends Dexie {
+  providers!: Table<Provider>;
+  chats!: Table<Chat>;
+  messages!: Table<Message>;
+
+  constructor() {
+    super('DevStudioDB');
+    this.version(1).stores({
+      providers: 'id, name, type, isActive',
+      chats: 'id, title, createdAt, selectedProviderId',
+      messages: 'id, chatId, role, timestamp',
+    });
+  }
+}
+
+export const db = new DevStudioDB();
