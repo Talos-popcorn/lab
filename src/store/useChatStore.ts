@@ -2,23 +2,26 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { db, type Provider, type Chat, type Message, type ToolStep } from '../db/db';
 import { HubSDK } from '../lib/toolhubSdk';
-import { getEncoding } from 'js-tiktoken';
-import { fromPreTrained } from '@lenml/tokenizer-gemini';
-
-// Инициализируем токенайзеры на уровне модуля
+// Убрали статические импорты, чтобы они не взрывали бандл при запуске!
 let geminiTokenizer: any = null;
-try {
-  geminiTokenizer = fromPreTrained();
-} catch (e) {
-  console.error('Failed to initialize Gemini tokenizer', e);
-}
-
 let tiktokenEncoder: any = null;
-try {
-  tiktokenEncoder = getEncoding('cl100k_base');
-} catch (e) {
-  console.error('Failed to initialize tiktoken encoder', e);
-}
+
+// Асинхронная ленивая загрузка: на ПК всё скачается и заработает, 
+// на iOS если и упадет, то тихо внутри Promise, не убив белым экраном всё приложение.
+setTimeout(async () => {
+  try {
+    const tiktoken = await import('js-tiktoken');
+    tiktokenEncoder = tiktoken.getEncoding('cl100k_base');
+  } catch (e) {
+    console.warn('Tiktoken init skipped', e);
+  }
+  try {
+    const gemini = await import('@lenml/tokenizer-gemini');
+    geminiTokenizer = gemini.fromPreTrained();
+  } catch (e) {
+    console.warn('Gemini init skipped', e);
+  }
+}, 50);
 
 export type TokenizerType = 'gemini' | 'tiktoken';
 

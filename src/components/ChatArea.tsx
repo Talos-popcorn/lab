@@ -758,7 +758,20 @@ export const ChatArea: React.FC = () => {
   // УСЛОВНЫЙ ВЫХОД ИЗ КОМПОНЕНТА СТРОГО ПОСЛЕ ВСЕХ ХУКОВ!
   if (!activeChatId || !currentChat) {
     return (
-      <div className="flex-1 bg-background flex flex-col items-center justify-center text-center p-8 select-none">
+      // Добавили relative, чтобы абсолютно спозиционировать кнопку внутри этого контейнера
+      <div className="flex-1 bg-background flex flex-col items-center justify-center text-center p-8 select-none relative">
+        
+        {/* Спасительная кнопка разворота левого сайдбара, если он скрыт */}
+        {!isLeftSidebarOpen && (
+          <button
+            onClick={() => setLeftSidebarOpen(true)}
+            className="absolute top-4 left-4 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-all z-10 shadow-sm"
+            title={t('sidebar.expand')}
+          >
+            <PanelLeft className="w-5 h-5" />
+          </button>
+        )}
+
         <div className="max-w-xl space-y-6">
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-foreground tracking-tight">{t('chat.empty_state_title')}</h1>
