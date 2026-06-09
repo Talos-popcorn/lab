@@ -211,7 +211,7 @@ export const useChatStore = create<ChatStore>()(
       setLeftSidebarOpen: (isOpen) => set({ isLeftSidebarOpen: isOpen }),
       setActiveChatId: (activeChatId) => set({ activeChatId }),
       updateChatSettings: async (chatId, settings) => {
-        await db.chats.update(chatId, settings);
+        await db.chats.update(chatId, { ...settings, updatedAt: Date.now() });
       },
       loadProviders: async () => {
         const list = await db.providers.toArray();
@@ -645,6 +645,7 @@ export const useChatStore = create<ChatStore>()(
             tokens: countTokens(contentWithError, tokenizer) + countToolStepsTokens(allToolSteps, tokenizer),
           });
         } finally {
+          await db.chats.update(chatId, { updatedAt: Date.now() });
           const freshChat = await db.chats.get(chatId);
           if (freshChat) {
             const isSliding = freshChat.enableSlidingWindow ?? true;
@@ -694,6 +695,10 @@ export const useChatStore = create<ChatStore>()(
           toolSteps: steps,
           tokens: countTokens(newContent, tokenizer) + countToolStepsTokens(steps, tokenizer),
         });
+
+        if (msg?.chatId) {
+          await db.chats.update(msg.chatId, { updatedAt: Date.now() });
+        }
       },
 
       clearTopMessages: async (chatId, count) => {

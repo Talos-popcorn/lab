@@ -14,6 +14,7 @@ export interface Chat {
   id: string;
   title: string;
   createdAt: number;
+  updatedAt: number; // Вот она, виновница торжества
   selectedProviderId: string;
   selectedModelId: string;
   enableSlidingWindow?: boolean;
@@ -48,9 +49,10 @@ export class DevStudioDB extends Dexie {
 
   constructor() {
     super('DevStudioDB');
-    this.version(1).stores({
+    // Поднимаем версию до 2, чтобы добавить индекс updatedAt
+    this.version(2).stores({
       providers: 'id, name, type, isActive',
-      chats: 'id, title, createdAt, selectedProviderId',
+      chats: 'id, title, createdAt, updatedAt, selectedProviderId',
       messages: 'id, chatId, role, timestamp',
     });
   }

@@ -17,7 +17,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
   const [editTitle, setEditTitle] = useState('');
 
   // Подписка на чаты из IndexedDB в реальном времени
-  const chats = useLiveQuery(() => db.chats.orderBy('createdAt').reverse().toArray()) || [];
+  const chats = useLiveQuery(() => 
+    db.chats.orderBy('updatedAt').reverse().toArray().then(items => {
+      // Если updatedAt нет (старые чаты), Dexie может их не вернуть или вернуть в конце.
+      // На всякий случай убедимся, что всё, что не имеет updatedAt, сортируется по createdAt
+      return items.sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+    })
+  ) || [];
 
   const handleCreateChat = async () => {
     const id = crypto.randomUUID();
@@ -26,6 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
       id,
       title: t('sidebar.new_chat_default'),
       createdAt: Date.now(),
+      updatedAt: Date.now(),
       selectedProviderId: defaultModel?.providerId || '',
       selectedModelId: defaultModel?.id || '',
       enableSlidingWindow: true,

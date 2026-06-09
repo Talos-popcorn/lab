@@ -597,7 +597,6 @@ MessageItem.displayName = 'MessageItem';
 export const ChatArea: React.FC = () => {
   const { t } = useTranslation();
   
-  // ВСЕ ХУКИ СТРОГО НА САМОМ ВЕРХУ!
   const {
     activeChatId,
     models,
