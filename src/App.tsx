@@ -9,13 +9,16 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const loadProviders = useChatStore((state) => state.loadProviders);
   const theme = useChatStore((state) => state.theme);
+  
+  const isLeftSidebarOpen = useChatStore((state) => state.isLeftSidebarOpen);
+  const setLeftSidebarOpen = useChatStore((state) => state.setLeftSidebarOpen);
+  const isContextSidebarOpen = useChatStore((state) => state.isContextSidebarOpen);
+  const setContextSidebarOpen = useChatStore((state) => state.setContextSidebarOpen);
 
-  // При монтировании загружаем провайдеров из БД и опрашиваем доступные модели
   useEffect(() => {
     loadProviders();
   }, [loadProviders]);
 
-  // При изменении темы обновляем класс на элементе html
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -24,9 +27,58 @@ function App() {
     }
   }, [theme]);
 
+  // PWA Hardening: Бетонирование хранилища и Превентивное Бесшовное Обновление
+  useEffect(() => {
+    // 1. Защита IndexedDB от удаления в iOS Safari при недостатке памяти
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persisted().then((isPersisted) => {
+        if (!isPersisted) {
+          navigator.storage.persist().then((granted) => {
+            if (granted) {
+              console.log('Storage successfully hardened against iOS eviction.');
+            }
+          });
+        }
+      });
+    }
+
+    // 2. Молчаливая проверка обновлений при каждом открытии/разблокировке PWA
+    if ('serviceWorker' in navigator) {
+      const checkUpdate = () => {
+        navigator.serviceWorker.getRegistration().then((reg) => {
+          if (reg) reg.update();
+        });
+      };
+
+      // Проверяем при старте и каждый раз при разблокировке экрана / возврате на вкладку
+      checkUpdate();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          checkUpdate();
+        }
+      });
+    }
+  }, []);
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans antialiased">
-      {/* Боковая панель (список чатов) */}
+    <div className="fixed inset-0 w-full overflow-hidden bg-background text-foreground font-sans antialiased flex">
+      {/* Оверлей затемнения для ЛЕВОГО сайдбара */}
+      {isLeftSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/70 md:hidden"
+          onClick={() => setLeftSidebarOpen(false)}
+        />
+      )}
+
+      {/* Оверлей затемнения для ПРАВОГО сайдбара */}
+      {isContextSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/70 lg:hidden"
+          onClick={() => setContextSidebarOpen(false)}
+        />
+      )}
+
+      {/* Левая боковая панель */}
       <Sidebar onOpenSettings={() => setIsSettingsOpen(true)} />
 
       {/* Основная область чата */}
@@ -35,7 +87,7 @@ function App() {
       {/* Правая панель контекста */}
       <ContextSidebar />
 
-      {/* Модальное окно настроек */}
+      {/* Модалка настроек */}
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );

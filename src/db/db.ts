@@ -14,13 +14,29 @@ export interface Chat {
   id: string;
   title: string;
   createdAt: number;
-  updatedAt: number; // Вот она, виновница торжества
+  updatedAt: number;
+  totalTokens?: number;
   selectedProviderId: string;
   selectedModelId: string;
   enableSlidingWindow?: boolean;
   slidingWindowLimit?: number;
   toolhubEnabled?: boolean;
   toolhubDelay?: number; // Задержка перед следующим запросом в llm после вызова инструмента (в секундах)
+  includeTimestamps?: boolean;
+  graphmemEnabled?: boolean;
+  graphmemUrl?: string;
+  graphmemToken?: string;
+  graphmemDialogId?: string;
+  graphmemOnlyLatestSnippets?: boolean;
+  graphmemIngestUser?: boolean;
+  graphmemIngestAssistant?: boolean;
+  graphmemIncludeToolSteps?: boolean;
+  graphmemMindSurf?: boolean;
+  graphmemFreezeGraph?: boolean;
+  temperature?: number;
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
 }
 
 export interface ToolStep {
@@ -40,6 +56,7 @@ export interface Message {
   timestamp: number;
   tokens?: number;
   toolSteps?: ToolStep[];
+  isPinned?: boolean;
 }
 
 export class DevStudioDB extends Dexie {

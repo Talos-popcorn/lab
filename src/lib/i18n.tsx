@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import ruFallback from '../../public/langs/ru.json';
+import enFallback from '../../public/langs/en.json';
+import zhFallback from '../../public/langs/zh.json';
 
 type Translations = Record<string, string>;
 
@@ -11,8 +14,14 @@ interface I18nContextType {
 
 const I18nContext = createContext<I18nContextType | null>(null);
 
-const SUPPORTED_LANGS = ['ru', 'en'];
+const SUPPORTED_LANGS = ['ru', 'en', 'zh'];
 const DEFAULT_LANG = 'en';
+
+const FALLBACKS: Record<string, Translations> = {
+  ru: ruFallback as Translations,
+  en: enFallback as Translations,
+  zh: zhFallback as Translations,
+};
 
 const getInitialLang = () => {
   const saved = localStorage.getItem('lab-lang');
@@ -24,8 +33,8 @@ const getInitialLang = () => {
 
 export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [lang, setActiveLang] = useState(getInitialLang());
-  const [translations, setTranslations] = useState<Translations>({});
-  const [isLoading, setIsLoading] = useState(true);
+  const [translations, setTranslations] = useState<Translations>(FALLBACKS[getInitialLang()] || FALLBACKS.en);
+  const [isLoading, setIsLoading] = useState(false);
 
   const loadTranslations = async (targetLang: string) => {
     setIsLoading(true);
@@ -37,10 +46,14 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setActiveLang(targetLang);
         localStorage.setItem('lab-lang', targetLang);
       } else {
-        console.error(`Failed to load translations for ${targetLang}`);
+        console.warn(`Failed to fetch /langs/${targetLang}.json, using imported fallback`);
+        setTranslations(FALLBACKS[targetLang] || FALLBACKS.en);
+        setActiveLang(targetLang);
       }
     } catch (e) {
-      console.error('Error loading translations', e);
+      console.warn('Error fetching translations, using imported fallback', e);
+      setTranslations(FALLBACKS[targetLang] || FALLBACKS.en);
+      setActiveLang(targetLang);
     } finally {
       setIsLoading(false);
     }
@@ -51,7 +64,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const t = (key: string, params?: Record<string, string | number>) => {
-    let text = translations[key] || key;
+    let text = translations[key] || FALLBACKS.en[key] || key;
     if (params) {
       Object.entries(params).forEach(([paramKey, paramValue]) => {
         text = text.replace(`{${paramKey}}`, String(paramValue));
@@ -71,6 +84,18 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
       {children}
     </I18nContext.Provider>
   );
+};
+
+export const translate = (key: string, params?: Record<string, string | number>): string => {
+  const currentLang = getInitialLang();
+  const dict = FALLBACKS[currentLang] || FALLBACKS.en;
+  let text = dict[key] || FALLBACKS.en[key] || key;
+  if (params) {
+    Object.entries(params).forEach(([paramKey, paramValue]) => {
+      text = text.replace(`{${paramKey}}`, String(paramValue));
+    });
+  }
+  return text;
 };
 
 export const useTranslation = () => {

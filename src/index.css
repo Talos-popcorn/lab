@@ -1,3 +1,5 @@
+@import 'katex/dist/katex.min.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -52,8 +54,25 @@
 @layer base {
   * {
     @apply border-border;
+    -webkit-tap-highlight-color: transparent;
   }
+  
+  html, body, #root {
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+  }
+
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Разрешаем выделять текст только внутри сообщений чата и редактора кода */
+.selectable-text,
+.select-text {
+  -webkit-user-select: text !important;
+  user-select: text !important;
 }

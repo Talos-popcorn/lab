@@ -1,13 +1,14 @@
 export class HubSDK {
   baseUrl: string;
   password?: string;
+  extraHeaders: Record<string, string>;
 
-  constructor(baseUrl: string, password?: string) {
+  constructor(baseUrl: string, password?: string, extraHeaders: Record<string, string> = {}) {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
     this.password = password;
+    this.extraHeaders = extraHeaders;
   }
 
-  // Приватный хелпер для проверки блоков кода
   _isInsideCodeBlock(fullText: string, matchIndex: number): boolean {
     const textBeforeMatch = fullText.slice(0, matchIndex);
     const backtickMatches = textBeforeMatch.match(/```/g);
@@ -18,7 +19,8 @@ export class HubSDK {
   async _request(path: string, method = 'GET', body: any = null) {
     const url = `${this.baseUrl}${path}`;
     const headers: Record<string, string> = {
-      'accept': 'application/json'
+      'accept': 'application/json',
+      ...this.extraHeaders
     };
     if (this.password) {
       headers['x-agent-password'] = this.password;
@@ -26,15 +28,29 @@ export class HubSDK {
     if (body) {
       headers['Content-Type'] = 'application/json';
     }
+
     const response = await fetch(url, {
       method,
       headers,
       body: body ? JSON.stringify(body) : null
     });
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      let details = '';
+      try {
+        const text = await response.text();
+        details = text ? `: ${text}` : '';
+      } catch {}
+      throw new Error(`HTTP error! status: ${response.status}${details}`);
     }
-    return await response.json();
+
+    const text = await response.text();
+    if (!text) return {};
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { raw: text };
+    }
   }
 
   async listTools(path = '/'): Promise<any> {
@@ -46,24 +62,68 @@ export class HubSDK {
   }
 
   async getSmartPrompt(): Promise<string> {
-    const root = await this.listTools('/');
-    const resources = root.categories?.map((c: any) => `[Folder] ${c.path}`).join('\n') || '';
-    return `${root.prompt || ''}\n\nДОСТУПНЫЕ РЕСУРСЫ:\n${resources}`;
+    const res = await this._request('/prompt', 'GET');
+    return res.prompt || '';
   }
 
   _simplifyResponse(data: any): any {
+    if (data === null || data === undefined) return data;
+
+    // Распаковываем транспортную обёртку Fastify { success: true, data: ..., durationMs: 26 }
+    if (typeof data === 'object' && !Array.isArray(data)) {
+      if ('durationMs' in data && 'data' in data && 'success' in data) {
+        const { durationMs, data: innerData } = data;
+        const simplifiedInner = this._simplifyResponse(innerData);
+
+        // Если внутри объект — мерджим с durationMs на один плоский уровень
+        if (typeof simplifiedInner === 'object' && simplifiedInner !== null && !Array.isArray(simplifiedInner)) {
+          return {
+            ...simplifiedInner,
+            durationMs
+          };
+        }
+
+        // Если внутри массив или примитив
+        return {
+          result: simplifiedInner,
+          durationMs
+        };
+      }
+    }
+
     if (Array.isArray(data)) {
       return data.map(item => this._simplifyResponse(item));
-    } else if (data !== null && typeof data === 'object') {
+    } else if (typeof data === 'object') {
       const simplified: Record<string, any> = {};
       for (const [key, value] of Object.entries(data)) {
-        if (['id', 'createdAt', 'updatedAt', 'isActive', 'runnerId'].includes(key)) continue;
+        if (['createdAt', 'updatedAt', 'isActive', 'runnerId'].includes(key)) continue;
         if (value === null || value === undefined) continue;
         simplified[key] = this._simplifyResponse(value);
       }
       return simplified;
     }
     return data;
+  }
+
+  // Безопасный парсер JSON для нестрогих ответов моделей
+  _parsePayloadSafely(str: string): any {
+    const trimmed = str.trim();
+    if (!trimmed || trimmed === '{}') return {};
+    
+    try {
+      return JSON.parse(trimmed);
+    } catch (firstErr: any) {
+      // Попытка исправить одинарные кавычки и висячие запятые
+      try {
+        const fixed = trimmed
+          .replace(/,\s*([}\]])/g, '$1') // Убираем trailing commas
+          .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Ключи в кавычки
+          .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"'); // Одинарные кавычки в двойные
+        return JSON.parse(fixed);
+      } catch {
+        throw new Error(`Invalid JSON payload: ${firstErr.message}`);
+      }
+    }
   }
 
   async processAgentResponse(llmText: string): Promise<{
@@ -75,47 +135,61 @@ export class HubSDK {
     error?: string;
     cleanText: string;
   }> {
-    // Собираем регулярку по кусочкам, чтобы не триггерить старый парсер во время сохранения
     const tagStart = '<' + 'hub>';
-    const tagEnd = '<\\/' + 'hub>';
-    const regex = new RegExp(tagStart + '\\s*(listTools|callTool)\\s*\\(\\s*["\']([^"\']+)["\']\\s*(?:,\\s*({.*?}))?\\s*\\)\\s*' + tagEnd, 'gs');
+    const tagEnd = '</' + 'hub>';
+    const regex = new RegExp(tagStart + '\\s*([\\s\\S]*?)\\s*' + tagEnd, 'gi');
 
-    let match;
-    let foundMatch = null;
+    let match: RegExpExecArray | null;
+    let foundMatch: { 
+      index: number; 
+      fullMatch: string; 
+      method: 'listTools' | 'callTool'; 
+      path: string; 
+      payloadStr: string 
+    } | null = null;
 
-    // Ищем первое совпадение вне блоков кода
     while ((match = regex.exec(llmText)) !== null) {
       if (!this._isInsideCodeBlock(llmText, match.index)) {
-        foundMatch = match;
-        break;
+        const innerContent = match[1].trim();
+        const methodMatch = innerContent.match(/^(listTools|callTool)\s*\(\s*(["'])(.*?)\2/);
+
+        if (methodMatch) {
+          const method = methodMatch[1] as 'listTools' | 'callTool';
+          const path = methodMatch[3];
+          const rest = innerContent.slice(methodMatch[0].length).trim();
+          
+          let payloadStr = '{}';
+          if (rest.startsWith(',')) {
+            let body = rest.slice(1).trim();
+            if (body.endsWith(')')) {
+              body = body.slice(0, -1).trim();
+            }
+            payloadStr = body || '{}';
+          }
+
+          foundMatch = {
+            index: match.index,
+            fullMatch: match[0],
+            method,
+            path,
+            payloadStr
+          };
+          break;
+        }
       }
     }
 
     if (!foundMatch) return { called: false, cleanText: llmText };
 
-    const method = foundMatch[1] as 'listTools' | 'callTool';
-    const path = foundMatch[2];
-    const payloadStr = foundMatch[3] || "{}";
-    const matchStr = foundMatch[0];
+    const { method, path, payloadStr, fullMatch, index } = foundMatch;
 
-    // Вырезаем строго найденный вызов по его индексу
     const cleanText = (
-      llmText.slice(0, foundMatch.index) + 
-      llmText.slice(foundMatch.index + matchStr.length)
+      llmText.slice(0, index) + 
+      llmText.slice(index + fullMatch.length)
     ).trim();
 
     try {
-      let parsedPayload = {};
-      try {
-        parsedPayload = JSON.parse(payloadStr);
-      } catch (err) {
-        // Парсим нестрогий JSON (например, без кавычек у ключей)
-        try {
-          parsedPayload = (new Function(`return (${payloadStr})`))();
-        } catch (evalErr) {
-          // Оставляем пустым в случае фиаско
-        }
-      }
+      const parsedPayload = this._parsePayloadSafely(payloadStr);
 
       const result = method === 'listTools' 
         ? await this.listTools(path) 

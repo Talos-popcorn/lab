@@ -96,7 +96,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ language, value }) => {
         - rounded-t-lg сохраняет скругление углов.
         - bg-muted/95 backdrop-blur-sm делает её непрозрачной для пролетающего под ней кода.
       */}
-      <div className="sticky -top-4 z-10 flex items-center justify-between px-4 py-2 bg-muted/95 backdrop-blur-sm border-b border-border select-none rounded-t-lg">
+      <div className="sticky -top-4 z-10 flex items-center justify-between px-4 py-2 bg-muted border-b border-border select-none rounded-t-lg">
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold uppercase text-foreground tracking-wider">
             {language || t('code.default_lang')}
@@ -105,7 +105,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ language, value }) => {
             {t('code.lines', { count: lineCount })}
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3">
           <button
             onClick={handleCopy}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -114,12 +114,12 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ language, value }) => {
             {isCopied ? (
               <>
                 <Check className="w-3.5 h-3.5 text-green-500" />
-                <span className="text-green-500 font-medium">{t('code.copied')}</span>
+                <span className="hidden sm:inline text-green-500 font-medium">{t('code.copied')}</span>
               </>
             ) : (
               <>
                 <Copy className="w-3.5 h-3.5" />
-                <span>{t('code.copy')}</span>
+                <span className="hidden sm:inline">{t('code.copy')}</span>
               </>
             )}
           </button>
@@ -131,12 +131,12 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ language, value }) => {
             {isCollapsed ? (
               <>
                 <ChevronDown className="w-3.5 h-3.5" />
-                <span>{t('code.expand')}</span>
+                <span className="hidden sm:inline">{t('code.expand')}</span>
               </>
             ) : (
               <>
                 <ChevronUp className="w-3.5 h-3.5" />
-                <span>{t('code.collapse')}</span>
+                <span className="hidden sm:inline">{t('code.collapse')}</span>
               </>
             )}
           </button>
@@ -155,14 +155,17 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ language, value }) => {
             onMount={handleEditorDidMount}
             options={{
               readOnly: true,
+              domReadOnly: true,
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
               wordWrap: 'on',
               automaticLayout: true,
-              fontSize: 14,
+              fontSize: 13,
               fontFamily: "Fira Code, Menlo, Monaco, 'Courier New', monospace",
               lineNumbers: 'on',
               renderLineHighlight: 'none',
+              contextmenu: false,
+              mouseWheelZoom: false,
               scrollbar: {
                 vertical: 'hidden',
                 horizontal: 'auto',
